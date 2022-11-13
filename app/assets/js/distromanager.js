@@ -578,7 +578,7 @@ exports.pullRemote = function(){
         return exports.pullLocal()
     }
     return new Promise((resolve, reject) => {
-        const distroURL = 'http://mc.westeroscraft.com/WesterosCraftLauncher/distribution.json'
+        const distroURL = 'http://hobbitcraft.cc/launcher/distribution.json'
         const opts = {
             url: distroURL,
             timeout: 2500

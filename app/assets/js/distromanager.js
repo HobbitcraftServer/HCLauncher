@@ -118,7 +118,7 @@ class Module {
      * @returns {Module} The parsed Module.
      */
     static fromJSON(json, serverid){
-        return new Module(json.id, json.name, json.type, json.required, json.artifact, json.subModules, serverid)
+        return new Module(json.id, json.name, json.type, json.classpath, json.required, json.artifact, json.subModules, serverid)
     }
 
     /**
@@ -143,9 +143,10 @@ class Module {
         }
     }
 
-    constructor(id, name, type, required, artifact, subModules, serverid) {
+    constructor(id, name, type, classpath, required, artifact, subModules, serverid) {
         this.identifier = id
         this.type = type
+        this.classpath = classpath
         this._resolveMetaData()
         this.name = name
         this.required = Required.fromJSON(required)
@@ -306,6 +307,13 @@ class Module {
         return this.type
     }
 
+    /**
+     * @returns {boolean} Whether or not this library should be on the classpath.
+     */
+    getClasspath(){
+        return this.classpath ?? true
+    }
+
 }
 exports.Module
 
@@ -396,20 +404,6 @@ class Server {
      */
     isMainServer(){
         return this.mainServer
-    }
-
-     /**
-    * @returns {string} The server code for this server
-    */
-      getServerCode(){
-        return this.serverCode
-    }
-
-    /**
-    * @returns {string} The server code for this server
-    */
-    getServerCode(){
-       return this.serverCode
     }
 
     /**
@@ -514,33 +508,6 @@ class DistroIndex {
     }
 
     /**
-     * Get a server configuration by its ID. If it does not
-     * exist, null will be returned.
-     *
-     * @param {string} id The ID of the server.
-     *
-     * @returns {Server[]} The server configuration with the given ID or null.
-     */
-     getServersFromCode(code){
-        let servs = []
-         for(let serv of this.servers){
-             if(serv.serverCode === code){
-                 servs.push(serv)
-             }
-         }
-         return servs
-     }
- 
-    getServersFromCode(code){
-       let servs = []
-        for(let serv of this.servers){
-            if(serv.serverCode === code){
-                servs.push(serv)
-            }
-        }
-        return servs
-    }
-    /**
      * Get the main server.
      * 
      * @returns {Server} The main server.
@@ -579,6 +546,7 @@ exports.pullRemote = function(){
     }
     return new Promise((resolve, reject) => {
         const distroURL = 'http://hobbitcraft.cc/launcher/distribution.json'
+        //const distroURL = 'https://gist.githubusercontent.com/dscalzi/53b1ba7a11d26a5c353f9d5ae484b71b/raw/'
         const opts = {
             url: distroURL,
             timeout: 2500

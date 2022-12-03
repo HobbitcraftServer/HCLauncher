@@ -10,6 +10,7 @@ const { MojangRestAPI, getServerStatus }     = require('helios-core/mojang')
 // Internal Requirements
 const DiscordWrapper          = require('./assets/js/discordwrapper')
 const ProcessBuilder          = require('./assets/js/processbuilder')
+const { Util } = require('./assets/js/assetguard')
 const { RestResponseStatus, isDisplayableError } = require('helios-core/common')
 
 // Launch Elements
@@ -85,30 +86,29 @@ function setLaunchEnabled(val){
 
 // Bind launch button
 document.getElementById('launch_button').addEventListener('click', function(e){
-    if(checkCurrentServer(true)){
-        loggerLanding.log('Launching game..')
-        const mcVersion = DistroManager.getDistribution().getServer(ConfigManager.getSelectedServer()).getMinecraftVersion()
-        const jExe = ConfigManager.getJavaExecutable()
-        if(jExe == null){
-            asyncSystemScan(mcVersion)
-        } else {
+    loggerLanding.log('Launching game..')
+    const mcVersion = DistroManager.getDistribution().getServer(ConfigManager.getSelectedServer()).getMinecraftVersion()
+    const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
+    if(jExe == null){
+        asyncSystemScan(mcVersion)
+    } else {
 
-            setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
-            toggleLaunchArea(true)
-            setLaunchPercentage(0, 100)
+        setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
+        toggleLaunchArea(true)
+        setLaunchPercentage(0, 100)
 
-            const jg = new JavaGuard(mcVersion)
-            jg._validateJavaBinary(jExe).then((v) => {
-                loggerLanding.log('Java version meta', v)
-                if(v.valid){
-                    dlAsync()
-                } else {
-                    asyncSystemScan(mcVersion)
-                }
-            })
-        }
+        const jg = new JavaGuard(mcVersion)
+        jg._validateJavaBinary(jExe).then((v) => {
+            loggerLanding.log('Java version meta', v)
+            if(v.valid){
+                dlAsync()
+            } else {
+                asyncSystemScan(mcVersion)
+            }
+        })
     }
 })
+
 // Bind settings button
 document.getElementById('settingsMediaButton').onclick = (e) => {
     prepareSettings()
@@ -141,13 +141,13 @@ updateSelectedAccount(ConfigManager.getSelectedAccount())
 // Bind selected server
 function updateSelectedServer(serv){
     if(getCurrentView() === VIEWS.settings){
-        saveAllModConfigurations()
+        fullSettingsSave()
     }
     ConfigManager.setSelectedServer(serv != null ? serv.getID() : null)
     ConfigManager.save()
     server_selection_button.innerHTML = '\u2022 ' + (serv != null ? serv.getName() : 'No Server Selected')
     if(getCurrentView() === VIEWS.settings){
-        animateModsTabRefresh()
+        animateSettingsTabRefresh()
     }
     setLaunchEnabled(serv != null)
 }
@@ -318,6 +318,8 @@ function asyncSystemScan(mcVersion, launchAfter = true){
     sysAEx.stdio[2].on('data', (data) => {
         loggerSysAEx.log(data)
     })
+
+    const javaVer = Util.mcVersionAtLeast('1.17', mcVersion) ? '17' : '8'
     
     sysAEx.on('message', (m) => {
 
@@ -327,14 +329,14 @@ function asyncSystemScan(mcVersion, launchAfter = true){
                 // Show this information to the user.
                 setOverlayContent(
                     'No Compatible<br>Java Installation Found',
-                    'In order to launch Minecraft, you need a 64-bit installation of Java 8. Would you like us to install a copy?',
+                    `In order to join Hobbitcraft, you need a 64-bit installation of Java ${javaVer}. Would you like us to install a copy?`,
                     'Install Java',
                     'Install Manually'
                 )
                 setOverlayHandler(() => {
                     setLaunchDetails('Preparing Java Download..')
-                    sysAEx.send({task: 'changeContext', class: 'AssetGuard', args: [ConfigManager.getCommonDirectory(),ConfigManager.getJavaExecutable()]})
-                    sysAEx.send({task: 'execute', function: '_enqueueOpenJDK', argsArr: [ConfigManager.getDataDirectory()]})
+                    sysAEx.send({task: 'changeContext', class: 'AssetGuard', args: [ConfigManager.getCommonDirectory(),ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())]})
+                    sysAEx.send({task: 'execute', function: '_enqueueOpenJDK', argsArr: [ConfigManager.getDataDirectory(), mcVersion]})
                     toggleOverlay(false)
                 })
                 setDismissHandler(() => {
@@ -342,7 +344,7 @@ function asyncSystemScan(mcVersion, launchAfter = true){
                         //$('#overlayDismiss').toggle(false)
                         setOverlayContent(
                             'Java is Required<br>to Launch',
-                            'A valid x64 installation of Java 8 is required to launch.<br><br>Please refer to our <a href="https://github.com/dscalzi/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">Java Management Guide</a> for instructions on how to manually install Java.',
+                            `A valid x64 installation of Java ${javaVer} is required to launch.<br><br>Please refer to our <a href="https://github.com/dscalzi/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">Java Management Guide</a> for instructions on how to manually install Java.`,
                             'I Understand',
                             'Go Back'
                         )
@@ -361,7 +363,7 @@ function asyncSystemScan(mcVersion, launchAfter = true){
 
             } else {
                 // Java installation found, use this to launch the game.
-                ConfigManager.setJavaExecutable(m.result)
+                ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), m.result)
                 ConfigManager.save()
 
                 // We need to make sure that the updated value is on the settings UI.
@@ -435,7 +437,7 @@ function asyncSystemScan(mcVersion, launchAfter = true){
                     remote.getCurrentWindow().setProgressBar(-1)
 
                     // Extraction completed successfully.
-                    ConfigManager.setJavaExecutable(m.args[0])
+                    ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), m.args[0])
                     ConfigManager.save()
 
                     if(extractListener != null){
@@ -507,7 +509,7 @@ function dlAsync(login = true){
     aEx = cp.fork(path.join(__dirname, 'assets', 'js', 'assetexec.js'), [
         'AssetGuard',
         ConfigManager.getCommonDirectory(),
-        ConfigManager.getJavaExecutable()
+        ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
     ], {
         env: forkEnv,
         stdio: 'pipe'
@@ -687,7 +689,7 @@ function dlAsync(login = true){
                     if(SERVER_JOINED_REGEX.test(data)){
                         DiscordWrapper.updateDetails('Exploring the Realm!')
                     } else if(GAME_JOINED_REGEX.test(data)){
-                        DiscordWrapper.updateDetails('Playing Hobbitcraft')
+                        DiscordWrapper.updateDetails('Updating...')
                     }
                 }
 
@@ -764,71 +766,6 @@ function dlAsync(login = true){
             }
         })
     })
-}
-/**
- * Checks the current server to ensure that they still have permission to play it (checking server code, if applicable) and open up an error overlay if specified
- * @Param {boolean} whether or not to show the error overlay
- */
- function checkCurrentServer(errorOverlay = true){
-    const selectedServId = ConfigManager.getSelectedServer()
-    if(selectedServId){
-        const selectedServ = DistroManager.getDistribution().getServer(selectedServId)
-        if(selectedServ){
-            if(selectedServ.getServerCode() && selectedServ.getServerCode() !== ''){
-                if(!ConfigManager.getServerCodes().includes(selectedServ.getServerCode())){
-                    if(errorOverlay){
-                        setOverlayContent(
-                            'Current Server Restricted!',
-                            'It seems that you no longer have the server code required to access this server! Please switch to a different server to play on.<br><br>If you feel this is an error, please contact the server administrator',
-                            'Switch Server'
-                        )
-                        setOverlayHandler(() => {
-                            toggleServerSelection(true)
-                        })
-                        setDismissHandler(() => {
-                            toggleOverlay(false)
-                        })
-                        toggleOverlay(true, true)
-                    }
-                    return false
-                }
-            }
-        }
-        return true
-    }
-}
-
-/**
- * Checks the current server to ensure that they still have permission to play it (checking server code, if applicable) and open up an error overlay if specified
- * @Param {boolean} whether or not to show the error overlay
- */
- function checkCurrentServer(errorOverlay = true){
-    const selectedServId = ConfigManager.getSelectedServer()
-    if(selectedServId){
-        const selectedServ = DistroManager.getDistribution().getServer(selectedServId)
-        if(selectedServ){
-            if(selectedServ.getServerCode() && selectedServ.getServerCode() !== ''){
-                if(!ConfigManager.getServerCodes().includes(selectedServ.getServerCode())){
-                    if(errorOverlay){
-                        setOverlayContent(
-                            'Current Server Restricted!',
-                            'It seems that you no longer have the server code required to access this server! Please switch to a different server to play on.<br><br>If you feel this is an error, please contact the server administrator',
-                            'Switch Server'
-                        )
-                        setOverlayHandler(() => {
-                            toggleServerSelection(true)
-                        })
-                        setDismissHandler(() => {
-                            toggleOverlay(false)
-                        })
-                        toggleOverlay(true, true)
-                    }
-                    return false
-                }
-            }
-        }
-        return true
-    }
 }
 
 /**

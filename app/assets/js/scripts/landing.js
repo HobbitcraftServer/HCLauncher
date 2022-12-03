@@ -329,7 +329,7 @@ function asyncSystemScan(mcVersion, launchAfter = true){
                 // Show this information to the user.
                 setOverlayContent(
                     'No Compatible<br>Java Installation Found',
-                    `In order to join Hobbitcraft, you need a 64-bit installation of Java ${javaVer}. Would you like us to install a copy?`,
+                    `In order to use the Hobbitcraft Launcher, you need a 64-bit installation of Java ${javaVer}. Would you like us to install a copy? <br>(If you dont know what this means, click Install Java)`,
                     'Install Java',
                     'Install Manually'
                 )
@@ -709,7 +709,7 @@ function dlAsync(login = true){
                     proc.stdout.on('data', tempListener)
                     proc.stderr.on('data', gameErrorListener)
 
-                    setLaunchDetails('Done. Enjoy the server!')
+                    setLaunchDetails('Done. Launching!')
 
                     // Init Discord Hook
                     const distro = DistroManager.getDistribution()
